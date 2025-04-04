@@ -37,7 +37,8 @@ try {
             employee_id INT NOT NULL,
             date DATE NOT NULL,
             status ENUM('Present', 'Absent') NOT NULL,
-            check_in_time TIME NOT NULL,
+            check_in_time TIME,
+            check_out_time TIME,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (employee_id) REFERENCES employees(id),
             UNIQUE KEY unique_attendance (employee_id, date)
