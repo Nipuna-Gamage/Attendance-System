@@ -65,6 +65,9 @@ $employees = $stmt->fetchAll();
                     <li class="nav-item">
                         <a class="nav-link" href="reports.php">Reports</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link href="attendance_analysis.php">Analysis</a>
+                    </li>
                 </ul>
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
