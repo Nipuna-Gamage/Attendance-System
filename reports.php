@@ -3,169 +3,454 @@ session_start();
 require_once 'config.php';
 
 if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit();
+    http_response_code(401);
+    exit('Unauthorized');
 }
 
-// Handle export
-if (isset($_GET['export'])) {
-    header('Content-Type: text/csv');
-    header('Content-Disposition: attachment; filename="attendance_report.csv"');
-    
-    $output = fopen('php://output', 'w');
-    fputcsv($output, ['Employee Name', 'Date', 'Status', 'Check-in Time']);
-    
-    $stmt = $pdo->query("
-        SELECT e.name, a.date, a.status, a.check_in_time 
-        FROM attendance a 
-        JOIN employees e ON a.employee_id = e.id 
-        ORDER BY a.date DESC, e.name
-    ");
-    
-    while ($row = $stmt->fetch()) {
-        fputcsv($output, $row);
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $employee_id = $_POST['employee_id'] ?? null;
+    $action = $_POST['action'] ?? null;
+    $date = $_POST['date'] ?? date('Y-m-d');
+    $time = $_POST['time'] ?? date('H:i:s');
+
+    if (!$employee_id || !$action) {
+        http_response_code(400);
+        exit('Missing required parameters');
     }
-    
-    fclose($output);
-    exit();
+
+    try {
+        // Check if user is manager or admin
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch();
+
+        // Only allow managers and admins to mark attendance for others
+        if (($user['role'] != 'manager' && $user['role'] != 'admin') && $employee_id != $_SESSION['user_id']) {
+            http_response_code(403);
+            exit('Unauthorized to mark attendance for others');
+        }
+
+        // Check if attendance record exists for the date
+        $stmt = $pdo->prepare("SELECT * FROM attendance WHERE employee_id = ? AND date = ?");
+        $stmt->execute([$employee_id, $date]);
+        $attendance = $stmt->fetch();
+
+        if ($action === 'check_in') {
+            // Check if employee is marked as absent
+            if ($attendance && $attendance['status'] == 'Absent') {
+                http_response_code(400);
+                echo json_encode(['error' => 'Cannot check in after being marked as absent']);
+                exit();
+            }
+            
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET check_in_time = ?, status = 'Present' WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$time, $employee_id, $date]);
+            } else {
+                // Create new record
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, check_in_time, status) VALUES (?, ?, ?, 'Present')");
+                $stmt->execute([$employee_id, $date, $time]);
+            }
+        } elseif ($action === 'check_out') {
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET check_out_time = ? WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$time, $employee_id, $date]);
+            } else {
+                // Create new record with both check-in and check-out times
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, check_in_time, check_out_time, status) VALUES (?, ?, ?, ?, 'Present')");
+                $stmt->execute([$employee_id, $date, $time, $time]);
+            }
+        } elseif ($action === 'mark_absent') {
+            // Only managers and admins can mark absence
+            if ($user['role'] != 'manager' && $user['role'] != 'admin') {
+                http_response_code(403);
+                exit('Unauthorized to mark absence');
+            }
+            
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET status = 'Absent' WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$employee_id, $date]);
+            } else {
+                // Create new record with Absent status
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, status) VALUES (?, ?, 'Absent')");
+                $stmt->execute([$employee_id, $date]);
+            }
+        }
+
+        echo json_encode(['success' => true]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+} else {
+    http_response_code(405);
+    exit('Method not allowed');
+}
+?> <?php
+session_start();
+require_once 'config.php';
+
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    exit('Unauthorized');
 }
 
-// Get attendance statistics
-$stmt = $pdo->query("
-    SELECT 
-        COUNT(DISTINCT CASE WHEN status = 'Present' THEN employee_id END) as present_count,
-        COUNT(DISTINCT CASE WHEN status = 'Absent' THEN employee_id END) as absent_count,
-        COUNT(DISTINCT employee_id) as total_employees
-    FROM attendance 
-    WHERE date = CURDATE()
-");
-$stats = $stmt->fetch();
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $employee_id = $_POST['employee_id'] ?? null;
+    $action = $_POST['action'] ?? null;
+    $date = $_POST['date'] ?? date('Y-m-d');
+    $time = $_POST['time'] ?? date('H:i:s');
 
-// Get recent attendance
-$stmt = $pdo->query("
-    SELECT e.name, a.date, a.status, a.check_in_time 
-    FROM attendance a 
-    JOIN employees e ON a.employee_id = e.id 
-    ORDER BY a.date DESC, a.check_in_time DESC 
-    LIMIT 10
-");
-$recent_attendance = $stmt->fetchAll();
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reports - Attendance System</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        .stat-card {
-            transition: transform 0.2s;
+    if (!$employee_id || !$action) {
+        http_response_code(400);
+        exit('Missing required parameters');
+    }
+
+    try {
+        // Check if user is manager or admin
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch();
+
+        // Only allow managers and admins to mark attendance for others
+        if (($user['role'] != 'manager' && $user['role'] != 'admin') && $employee_id != $_SESSION['user_id']) {
+            http_response_code(403);
+            exit('Unauthorized to mark attendance for others');
         }
-        .stat-card:hover {
-            transform: translateY(-5px);
+
+        // Check if attendance record exists for the date
+        $stmt = $pdo->prepare("SELECT * FROM attendance WHERE employee_id = ? AND date = ?");
+        $stmt->execute([$employee_id, $date]);
+        $attendance = $stmt->fetch();
+
+        if ($action === 'check_in') {
+            // Check if employee is marked as absent
+            if ($attendance && $attendance['status'] == 'Absent') {
+                http_response_code(400);
+                echo json_encode(['error' => 'Cannot check in after being marked as absent']);
+                exit();
+            }
+            
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET check_in_time = ?, status = 'Present' WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$time, $employee_id, $date]);
+            } else {
+                // Create new record
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, check_in_time, status) VALUES (?, ?, ?, 'Present')");
+                $stmt->execute([$employee_id, $date, $time]);
+            }
+        } elseif ($action === 'check_out') {
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET check_out_time = ? WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$time, $employee_id, $date]);
+            } else {
+                // Create new record with both check-in and check-out times
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, check_in_time, check_out_time, status) VALUES (?, ?, ?, ?, 'Present')");
+                $stmt->execute([$employee_id, $date, $time, $time]);
+            }
+        } elseif ($action === 'mark_absent') {
+            // Only managers and admins can mark absence
+            if ($user['role'] != 'manager' && $user['role'] != 'admin') {
+                http_response_code(403);
+                exit('Unauthorized to mark absence');
+            }
+            
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET status = 'Absent' WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$employee_id, $date]);
+            } else {
+                // Create new record with Absent status
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, status) VALUES (?, ?, 'Absent')");
+                $stmt->execute([$employee_id, $date]);
+            }
         }
-    </style>
-</head>
-<body class="bg-light">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="index.php"><i class="fas fa-calendar-check"></i> Attendance System</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="index.php">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="employees.php">Employees</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="reports.php">Reports</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
 
-    <div class="container mt-4">
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="card stat-card bg-primary text-white">
-                    <div class="card-body">
-                        <h5 class="card-title">Total Employees</h5>
-                        <h2 class="mb-0"><?php echo $stats['total_employees']; ?></h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card stat-card bg-success text-white">
-                    <div class="card-body">
-                        <h5 class="card-title">Present Today</h5>
-                        <h2 class="mb-0"><?php echo $stats['present_count']; ?></h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card stat-card bg-danger text-white">
-                    <div class="card-body">
-                        <h5 class="card-title">Absent Today</h5>
-                        <h2 class="mb-0"><?php echo $stats['absent_count']; ?></h2>
-                    </div>
-                </div>
-            </div>
-        </div>
+        echo json_encode(['success' => true]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+} else {
+    http_response_code(405);
+    exit('Method not allowed');
+}
+?> <?php
+session_start();
+require_once 'config.php';
 
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Attendance Reports</h5>
-                        <a href="?export=1" class="btn btn-success">
-                            <i class="fas fa-file-excel"></i> Export to CSV
-                        </a>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Employee Name</th>
-                                        <th>Date</th>
-                                        <th>Status</th>
-                                        <th>Check-in Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($recent_attendance as $record): ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($record['name']); ?></td>
-                                        <td><?php echo $record['date']; ?></td>
-                                        <td>
-                                            <span class="badge bg-<?php echo $record['status'] == 'Present' ? 'success' : 'danger'; ?>">
-                                                <?php echo $record['status']; ?>
-                                            </span>
-                                        </td>
-                                        <td><?php echo $record['check_in_time']; ?></td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    exit('Unauthorized');
+}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $employee_id = $_POST['employee_id'] ?? null;
+    $action = $_POST['action'] ?? null;
+    $date = $_POST['date'] ?? date('Y-m-d');
+    $time = $_POST['time'] ?? date('H:i:s');
+
+    if (!$employee_id || !$action) {
+        http_response_code(400);
+        exit('Missing required parameters');
+    }
+
+    try {
+        // Check if user is manager or admin
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch();
+
+        // Only allow managers and admins to mark attendance for others
+        if (($user['role'] != 'manager' && $user['role'] != 'admin') && $employee_id != $_SESSION['user_id']) {
+            http_response_code(403);
+            exit('Unauthorized to mark attendance for others');
+        }
+
+        // Check if attendance record exists for the date
+        $stmt = $pdo->prepare("SELECT * FROM attendance WHERE employee_id = ? AND date = ?");
+        $stmt->execute([$employee_id, $date]);
+        $attendance = $stmt->fetch();
+
+        if ($action === 'check_in') {
+            // Check if employee is marked as absent
+            if ($attendance && $attendance['status'] == 'Absent') {
+                http_response_code(400);
+                echo json_encode(['error' => 'Cannot check in after being marked as absent']);
+                exit();
+            }
+            
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET check_in_time = ?, status = 'Present' WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$time, $employee_id, $date]);
+            } else {
+                // Create new record
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, check_in_time, status) VALUES (?, ?, ?, 'Present')");
+                $stmt->execute([$employee_id, $date, $time]);
+            }
+        } elseif ($action === 'check_out') {
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET check_out_time = ? WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$time, $employee_id, $date]);
+            } else {
+                // Create new record with both check-in and check-out times
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, check_in_time, check_out_time, status) VALUES (?, ?, ?, ?, 'Present')");
+                $stmt->execute([$employee_id, $date, $time, $time]);
+            }
+        } elseif ($action === 'mark_absent') {
+            // Only managers and admins can mark absence
+            if ($user['role'] != 'manager' && $user['role'] != 'admin') {
+                http_response_code(403);
+                exit('Unauthorized to mark absence');
+            }
+            
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET status = 'Absent' WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$employee_id, $date]);
+            } else {
+                // Create new record with Absent status
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, status) VALUES (?, ?, 'Absent')");
+                $stmt->execute([$employee_id, $date]);
+            }
+        }
+
+        echo json_encode(['success' => true]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+} else {
+    http_response_code(405);
+    exit('Method not allowed');
+}
+?> <?php
+session_start();
+require_once 'config.php';
+
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    exit('Unauthorized');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $employee_id = $_POST['employee_id'] ?? null;
+    $action = $_POST['action'] ?? null;
+    $date = $_POST['date'] ?? date('Y-m-d');
+    $time = $_POST['time'] ?? date('H:i:s');
+
+    if (!$employee_id || !$action) {
+        http_response_code(400);
+        exit('Missing required parameters');
+    }
+
+    try {
+        // Check if user is manager or admin
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch();
+
+        // Only allow managers and admins to mark attendance for others
+        if (($user['role'] != 'manager' && $user['role'] != 'admin') && $employee_id != $_SESSION['user_id']) {
+            http_response_code(403);
+            exit('Unauthorized to mark attendance for others');
+        }
+
+        // Check if attendance record exists for the date
+        $stmt = $pdo->prepare("SELECT * FROM attendance WHERE employee_id = ? AND date = ?");
+        $stmt->execute([$employee_id, $date]);
+        $attendance = $stmt->fetch();
+
+        if ($action === 'check_in') {
+            // Check if employee is marked as absent
+            if ($attendance && $attendance['status'] == 'Absent') {
+                http_response_code(400);
+                echo json_encode(['error' => 'Cannot check in after being marked as absent']);
+                exit();
+            }
+            
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET check_in_time = ?, status = 'Present' WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$time, $employee_id, $date]);
+            } else {
+                // Create new record
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, check_in_time, status) VALUES (?, ?, ?, 'Present')");
+                $stmt->execute([$employee_id, $date, $time]);
+            }
+        } elseif ($action === 'check_out') {
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET check_out_time = ? WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$time, $employee_id, $date]);
+            } else {
+                // Create new record with both check-in and check-out times
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, check_in_time, check_out_time, status) VALUES (?, ?, ?, ?, 'Present')");
+                $stmt->execute([$employee_id, $date, $time, $time]);
+            }
+        } elseif ($action === 'mark_absent') {
+            // Only managers and admins can mark absence
+            if ($user['role'] != 'manager' && $user['role'] != 'admin') {
+                http_response_code(403);
+                exit('Unauthorized to mark absence');
+            }
+            
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET status = 'Absent' WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$employee_id, $date]);
+            } else {
+                // Create new record with Absent status
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, status) VALUES (?, ?, 'Absent')");
+                $stmt->execute([$employee_id, $date]);
+            }
+        }
+
+        echo json_encode(['success' => true]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+} else {
+    http_response_code(405);
+    exit('Method not allowed');
+}
+?> <?php
+session_start();
+require_once 'config.php';
+
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    exit('Unauthorized');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $employee_id = $_POST['employee_id'] ?? null;
+    $action = $_POST['action'] ?? null;
+    $date = $_POST['date'] ?? date('Y-m-d');
+    $time = $_POST['time'] ?? date('H:i:s');
+
+    if (!$employee_id || !$action) {
+        http_response_code(400);
+        exit('Missing required parameters');
+    }
+
+    try {
+        // Check if user is manager or admin
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch();
+
+        // Only allow managers and admins to mark attendance for others
+        if (($user['role'] != 'manager' && $user['role'] != 'admin') && $employee_id != $_SESSION['user_id']) {
+            http_response_code(403);
+            exit('Unauthorized to mark attendance for others');
+        }
+
+        // Check if attendance record exists for the date
+        $stmt = $pdo->prepare("SELECT * FROM attendance WHERE employee_id = ? AND date = ?");
+        $stmt->execute([$employee_id, $date]);
+        $attendance = $stmt->fetch();
+
+        if ($action === 'check_in') {
+            // Check if employee is marked as absent
+            if ($attendance && $attendance['status'] == 'Absent') {
+                http_response_code(400);
+                echo json_encode(['error' => 'Cannot check in after being marked as absent']);
+                exit();
+            }
+            
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET check_in_time = ?, status = 'Present' WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$time, $employee_id, $date]);
+            } else {
+                // Create new record
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, check_in_time, status) VALUES (?, ?, ?, 'Present')");
+                $stmt->execute([$employee_id, $date, $time]);
+            }
+        } elseif ($action === 'check_out') {
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET check_out_time = ? WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$time, $employee_id, $date]);
+            } else {
+                // Create new record with both check-in and check-out times
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, check_in_time, check_out_time, status) VALUES (?, ?, ?, ?, 'Present')");
+                $stmt->execute([$employee_id, $date, $time, $time]);
+            }
+        } elseif ($action === 'mark_absent') {
+            // Only managers and admins can mark absence
+            if ($user['role'] != 'manager' && $user['role'] != 'admin') {
+                http_response_code(403);
+                exit('Unauthorized to mark absence');
+            }
+            
+            if ($attendance) {
+                // Update existing record
+                $stmt = $pdo->prepare("UPDATE attendance SET status = 'Absent' WHERE employee_id = ? AND date = ?");
+                $stmt->execute([$employee_id, $date]);
+            } else {
+                // Create new record with Absent status
+                $stmt = $pdo->prepare("INSERT INTO attendance (employee_id, date, status) VALUES (?, ?, 'Absent')");
+                $stmt->execute([$employee_id, $date]);
+            }
+        }
+
+        echo json_encode(['success' => true]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+} else {
+    http_response_code(405);
+    exit('Method not allowed');
+}
+?> 

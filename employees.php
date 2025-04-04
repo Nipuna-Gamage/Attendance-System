@@ -20,6 +20,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $stmt->execute([$_POST['name'], $_POST['email'], $_POST['id']]);
                 break;
             case 'delete':
+                // First delete attendance records for this employee
+                $stmt = $pdo->prepare("DELETE FROM attendance WHERE employee_id = ?");
+                $stmt->execute([$_POST['id']]);
+                
+                // Then delete the employee
                 $stmt = $pdo->prepare("DELETE FROM employees WHERE id = ?");
                 $stmt->execute([$_POST['id']]);
                 break;
@@ -213,4 +218,4 @@ $employees = $stmt->fetchAll();
         }
     </script>
 </body>
-</html>
+</html> 
