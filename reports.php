@@ -7,7 +7,30 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Get today's statistics
+// Handle export
+if (isset($_GET['export'])) {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="attendance_report.csv"');
+    
+    $output = fopen('php://output', 'w');
+    fputcsv($output, ['Employee Name', 'Date', 'Status', 'Check-in Time']);
+    
+    $stmt = $pdo->query("
+        SELECT e.name, a.date, a.status, a.check_in_time 
+        FROM attendance a 
+        JOIN employees e ON a.employee_id = e.id 
+        ORDER BY a.date DESC, e.name
+    ");
+    
+    while ($row = $stmt->fetch()) {
+        fputcsv($output, $row);
+    }
+    
+    fclose($output);
+    exit();
+}
+
+// Get attendance statistics
 $stmt = $pdo->query("
     SELECT 
         COUNT(DISTINCT CASE WHEN status = 'Present' THEN employee_id END) as present_count,
@@ -20,20 +43,20 @@ $stats = $stmt->fetch();
 
 // Get recent attendance
 $stmt = $pdo->query("
-    SELECT e.name, a.status, a.check_in_time 
+    SELECT e.name, a.date, a.status, a.check_in_time 
     FROM attendance a 
     JOIN employees e ON a.employee_id = e.id 
-    WHERE a.date = CURDATE()
-    ORDER BY a.check_in_time DESC
+    ORDER BY a.date DESC, a.check_in_time DESC 
+    LIMIT 10
 ");
-$today_attendance = $stmt->fetchAll();
+$recent_attendance = $stmt->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Attendance System</title>
+    <title>Reports - Attendance System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -42,12 +65,6 @@ $today_attendance = $stmt->fetchAll();
         }
         .stat-card:hover {
             transform: translateY(-5px);
-        }
-        .status-present {
-            color: #28a745;
-        }
-        .status-absent {
-            color: #dc3545;
         }
     </style>
 </head>
@@ -61,13 +78,13 @@ $today_attendance = $stmt->fetchAll();
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
                     <li class="nav-item">
-                        <a class="nav-link active" href="index.php">Dashboard</a>
+                        <a class="nav-link" href="index.php">Dashboard</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="employees.php">Employees</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="reports.php">Reports</a>
+                        <a class="nav-link active" href="reports.php">Reports</a>
                     </li>
                 </ul>
                 <ul class="navbar-nav ms-auto">
@@ -110,8 +127,11 @@ $today_attendance = $stmt->fetchAll();
         <div class="row">
             <div class="col-md-12">
                 <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Today's Attendance</h5>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Attendance Reports</h5>
+                        <a href="?export=1" class="btn btn-success">
+                            <i class="fas fa-file-excel"></i> Export to CSV
+                        </a>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -119,23 +139,22 @@ $today_attendance = $stmt->fetchAll();
                                 <thead>
                                     <tr>
                                         <th>Employee Name</th>
+                                        <th>Date</th>
                                         <th>Status</th>
                                         <th>Check-in Time</th>
-                                        <th>Action</th>
                                     </tr>
                                 </thead>
-                                <tbody id="attendanceList">
-                                    <?php foreach ($today_attendance as $record): ?>
+                                <tbody>
+                                    <?php foreach ($recent_attendance as $record): ?>
                                     <tr>
                                         <td><?php echo htmlspecialchars($record['name']); ?></td>
-                                        <td class="status-<?php echo strtolower($record['status']); ?>">
-                                            <?php echo $record['status']; ?>
+                                        <td><?php echo $record['date']; ?></td>
+                                        <td>
+                                            <span class="badge bg-<?php echo $record['status'] == 'Present' ? 'success' : 'danger'; ?>">
+                                                <?php echo $record['status']; ?>
+                                            </span>
                                         </td>
                                         <td><?php echo $record['check_in_time']; ?></td>
-                                        <td>
-                                            <button class="btn btn-sm btn-success me-2" onclick="markAttendance(<?php echo $record['id']; ?>, 'Present')">Present</button>
-                                            <button class="btn btn-sm btn-danger" onclick="markAttendance(<?php echo $record['id']; ?>, 'Absent')">Absent</button>
-                                        </td>
                                     </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -148,36 +167,5 @@ $today_attendance = $stmt->fetchAll();
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script>
-        function loadAttendance() {
-            $.ajax({
-                url: 'get_attendance.php',
-                method: 'GET',
-                success: function(response) {
-                    $('#attendanceList').html(response);
-                }
-            });
-        }
-
-        function markAttendance(employeeId, status) {
-            $.ajax({
-                url: 'mark_attendance.php',
-                method: 'POST',
-                data: {
-                    employee_id: employeeId,
-                    status: status
-                },
-                success: function(response) {
-                    loadAttendance();
-                }
-            });
-        }
-
-        $(document).ready(function() {
-            loadAttendance();
-            setInterval(loadAttendance, 30000); // Refresh every 30 seconds
-        });
-    </script>
 </body>
 </html>
