@@ -1,16 +1,18 @@
 <?php
-$host = 'localhost';
-$dbname = 'attendance_system';
-$username = 'root';
-$password = '';
+// Database configuration
+define('DB_HOST', 'localhost');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+define('DB_NAME', 'attendance_system');
 
+// Create database connection
 try {
-    $pdo = new PDO("mysql:host=$host", $username, $password);
+    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Create database if not exists
-    $pdo->exec("CREATE DATABASE IF NOT EXISTS $dbname");
-    $pdo->exec("USE $dbname");
+    $pdo->exec("CREATE DATABASE IF NOT EXISTS " . DB_NAME);
+    $pdo->exec("USE " . DB_NAME);
     
     // Drop and recreate users table to add role column
     $pdo->exec("DROP TABLE IF EXISTS users");
@@ -67,4 +69,44 @@ try {
 } catch(PDOException $e) {
     die("Connection failed: " . $e->getMessage());
 }
+
+// Application configuration
+define('SITE_NAME', 'Attendance Management System');
+define('SITE_URL', 'http://localhost/Attendance%20System');
+
+// Time zone setting
+date_default_timezone_set('Asia/Colombo');
+
+// Error reporting
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// Constants for attendance status
+define('STATUS_PRESENT', 'Present');
+define('STATUS_ABSENT', 'Absent');
+define('STATUS_LATE', 'Late');
+
+// Constants for user roles
+define('ROLE_ADMIN', 'admin');
+define('ROLE_EMPLOYEE', 'employee');
+
+// File upload settings
+define('MAX_FILE_SIZE', 5 * 1024 * 1024); // 5MB
+define('ALLOWED_FILE_TYPES', ['jpg', 'jpeg', 'png', 'pdf']);
+define('UPLOAD_PATH', 'uploads/');
+
+// Pagination settings
+define('ITEMS_PER_PAGE', 10);
+
+// Security settings
+define('HASH_COST', 12); // For password_hash()
+define('TOKEN_EXPIRY', 3600); // 1 hour in seconds
+
+// Email settings (if needed)
+define('SMTP_HOST', 'smtp.gmail.com');
+define('SMTP_PORT', 587);
+define('SMTP_USER', '');
+define('SMTP_PASS', '');
+define('MAIL_FROM', '');
+define('MAIL_FROM_NAME', SITE_NAME);
 ?> 
