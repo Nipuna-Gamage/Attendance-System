@@ -101,7 +101,13 @@ foreach ($attendance_records as $record) {
             </div>
             <div class="col-md-4">
                 <label class="form-label">&nbsp;</label>
-                <button type="submit" class="btn btn-primary d-block">Generate Report</button>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Generate Report</button>
+                    <a href="export_report.php?start_date=<?php echo $start_date; ?>&end_date=<?php echo $end_date; ?>" 
+                       class="btn btn-success">
+                        <i class="fas fa-file-export"></i> Export CSV
+                    </a>
+                </div>
             </div>
         </form>
     </div>
@@ -134,7 +140,7 @@ foreach ($attendance_records as $record) {
     </div>
     <div class="col-md-3">
         <div class="card stat-card bg-warning text-white">
-            <div class="card-body">
+    <div class="card-body">
                 <h5 class="card-title">Late</h5>
                 <h2 class="mb-0"><?php echo $total_late; ?></h2>
             </div>
@@ -142,52 +148,52 @@ foreach ($attendance_records as $record) {
     </div>
 </div>
 
-<div class="table-responsive">
-    <table class="table table-hover">
-        <thead>
-            <tr>
-                <th>Employee Name</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Check-in Time</th>
-                <th>Check-out Time</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($attendance_records as $record): ?>
-            <tr>
-                <td><?php echo htmlspecialchars($record['employee_name']); ?></td>
-                <td><?php echo $record['date'] ? date('Y-m-d', strtotime($record['date'])) : 'Not Marked'; ?></td>
-                <td><?php echo $record['status'] ?? 'Not Marked'; ?></td>
-                <td>
-                    <?php 
-                    if ($record['check_in_time']) {
-                        $checkInTimeObj = new DateTime($record['check_in_time']);
-                        echo $checkInTimeObj->format('h:i A');
-                    } else {
-                        echo '-';
-                    }
-                    ?>
-                </td>
-                <td>
-                    <?php 
-                    if ($record['check_out_time']) {
-                        $checkOutTimeObj = new DateTime($record['check_out_time']);
-                        echo $checkOutTimeObj->format('h:i A');
-                    } else {
-                        echo '-';
-                    }
-                    ?>
-                </td>
-            </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-</div>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Employee Name</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th>Check-in Time</th>
+                        <th>Check-out Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($attendance_records as $record): ?>
+                    <tr>
+                        <td><?php echo htmlspecialchars($record['employee_name']); ?></td>
+                        <td><?php echo $record['date'] ? date('Y-m-d', strtotime($record['date'])) : 'Not Marked'; ?></td>
+                        <td><?php echo $record['status'] ?? 'Not Marked'; ?></td>
+                        <td>
+                            <?php 
+                            if ($record['check_in_time']) {
+                                $checkInTimeObj = new DateTime($record['check_in_time']);
+                                echo $checkInTimeObj->format('h:i A');
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </td>
+                        <td>
+                            <?php 
+                            if ($record['check_out_time']) {
+                                $checkOutTimeObj = new DateTime($record['check_out_time']);
+                                echo $checkOutTimeObj->format('h:i A');
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
 
 <?php include 'includes/footer.php'; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </body>
-</html> 
+</html>
