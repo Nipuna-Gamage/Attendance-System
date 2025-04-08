@@ -1,7 +1,8 @@
 <?php
-require_once 'config/session_config.php';
+require_once 'config/session_config.php'; // This already starts the session
 require_once 'config/config.php';
-session_start();
+
+// Remove session_start() from here since it's handled in session_config.php
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -203,4 +204,4 @@ $employees = $stmt->fetchAll();
     }
 </script>
 
-<?php include 'includes/footer.php'; ?> 
+<?php include 'includes/footer.php'; ?>

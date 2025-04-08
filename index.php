@@ -1,7 +1,6 @@
 <?php
-require_once 'config/session_config.php';
+require_once 'config/session_config.php'; // This already starts the session
 require_once 'config/config.php';
-session_start();
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -31,7 +30,7 @@ $stats = $stmt->fetch();
 if ($user['role'] == 'manager' || $user['role'] == 'admin') {
     // For managers and admins, show all employees
     $stmt = $pdo->prepare("
-        SELECT e.id, e.name, a.check_in_time, a.check_out_time 
+        SELECT e.id, e.name, a.check_in_time, a.check_out_time, a.status 
         FROM employees e 
         LEFT JOIN attendance a ON e.id = a.employee_id AND a.date = ?
         ORDER BY e.name
@@ -40,7 +39,7 @@ if ($user['role'] == 'manager' || $user['role'] == 'admin') {
 } else {
     // For regular employees, show only their attendance
     $stmt = $pdo->prepare("
-        SELECT e.id, e.name, a.check_in_time, a.check_out_time 
+        SELECT e.id, e.name, a.check_in_time, a.check_out_time, a.status 
         FROM employees e 
         LEFT JOIN attendance a ON e.id = a.employee_id AND a.date = ?
         WHERE e.id = ?
@@ -112,7 +111,15 @@ include 'includes/header.php';
                             <?php foreach ($today_attendance as $record): ?>
                             <tr>
                                 <td><?php echo htmlspecialchars($record['name']); ?></td>
-                                <td><?php echo $record['check_in_time'] ? 'Present' : 'Not Marked'; ?></td>
+                                <td><?php 
+                                    if (isset($record['status'])) {
+                                        echo $record['status'];
+                                    } elseif ($record['check_in_time']) {
+                                        echo 'Present';
+                                    } else {
+                                        echo 'Not Marked';
+                                    }
+                                ?></td>
                                 <td>
                                     <?php 
                                     if ($record['check_in_time']) {
@@ -282,4 +289,4 @@ include 'includes/header.php';
 
 <?php include 'includes/footer.php'; ?>
 </body>
-</html> 
+</html>

@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once 'config/session_config.php'; // This already starts the session
 require_once 'config/config.php';
 
 if (!isset($_SESSION['user_id'])) {
@@ -89,4 +89,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     http_response_code(405);
     exit('Method not allowed');
 }
-?> 
+?>

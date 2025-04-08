@@ -1,7 +1,6 @@
 <?php
-require_once 'config/session_config.php';
+require_once 'config/session_config.php'; // This already starts the session
 require_once 'config/config.php';
-session_start();
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -495,4 +494,4 @@ $bottom_employees = array_slice($employee_stats, -5, 5, true);
 
 <?php include 'includes/footer.php'; ?>
 </body>
-</html> 
+</html>
