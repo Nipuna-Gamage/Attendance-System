@@ -1,18 +1,18 @@
 <?php
 // Database configuration
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', 'if0_38670627_attendance_system');
+$DB_HOST = getenv('DB_HOST') ?: 'localhost';
+$DB_USER = getenv('DB_USER') ?: 'root';
+$DB_PASS = getenv('DB_PASS') ?: '';
+$DB_NAME = getenv('DB_NAME') ?: 'if0_38670627_attendance_system';
 
 // Create database connection
 try {
-    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
+    $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME, $DB_USER, $DB_PASS);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Create database if not exists
-    $pdo->exec("CREATE DATABASE IF NOT EXISTS " . DB_NAME);
-    $pdo->exec("USE " . DB_NAME);
+    $pdo->exec("CREATE DATABASE IF NOT EXISTS " . $DB_NAME);
+    $pdo->exec("USE " . $DB_NAME);
     
     // Drop and recreate users table to add role column
     $pdo->exec("DROP TABLE IF EXISTS users");
